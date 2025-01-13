@@ -1,0 +1,17 @@
+services:
+  postgresql:
+    image: postgres:17.2-alpine3.21
+    volumes:
+        - posgresql:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_HOST=localhost
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=test
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+
+volumes:
+  posgresql:
+    driver: local

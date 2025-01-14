@@ -6,6 +6,14 @@ const pq = @cImport({
     @cInclude("libpq-fe.h");
 });
 
+const MyEnum = enum { a, b };
+
+const User = struct {
+    id: u64,
+    name: []const u8,
+    active: bool,
+};
+
 pub fn main() !void {
     logging.initGlobalLogger(.{ .min_level = .debug });
 
@@ -56,27 +64,20 @@ pub fn main() !void {
     // }
 
     {
-        const pqRes = pq.PQexec(conn,
-            \\ SELECT * FROM users;
+        const pq_res = pq.PQexec(conn,
+            \\ SELECT * FROM users ORDER BY name DESC
         );
-        defer pq.PQclear(pqRes);
+        defer pq.PQclear(pq_res);
 
-        const status = pq.PQresultStatus(pqRes);
+        const status = pq.PQresultStatus(pq_res);
         if (status != pq.PGRES_TUPLES_OK) {
             logger.err("{s} => {s}", .{ pq.PQresStatus(status), pq.PQerrorMessage(conn) });
         } else {
-            const n_tuples = pq.PQntuples(pqRes);
-            const n_fields = pq.PQnfields(pqRes);
-            logger.info(
-                \\ Select command executed successfully: 
-                \\ - N Rows  : {}
-                \\ - N Fields: {}
-            , .{ n_tuples, n_fields });
+            const users = try db.ParseList(User).do(allocator, pq_res.?);
 
-            logger.info("Column names:", .{});
-            for (0..@as(usize, @intCast(n_fields))) |i| {
-                const col_name = pq.PQfname(pqRes, @as(c_int, @intCast(i)));
-                std.debug.print(" - Col {} = {s}\n", .{ i, col_name });
+            defer users.deinit();
+            for (users.items) |user| {
+                std.debug.print("{} [{}] - {s}\n", .{ user.id, user.active, user.name });
             }
         }
     }

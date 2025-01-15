@@ -1,5 +1,4 @@
 const std = @import("std");
-const Config = @import("./config.zig").Config;
 const logging = @import("./logging.zig");
 const DB = @import("./db.zig").DB;
 const pq = @cImport({
@@ -20,10 +19,6 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
-
-    // Configuration
-    var config = Config.initFromEnv(allocator);
-    defer config.deinit();
 
     const file = try std.fs.createFileAbsolute("/tmp/zig.log", .{});
     defer file.close();

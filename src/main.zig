@@ -1,7 +1,7 @@
 const std = @import("std");
 const Config = @import("./config.zig").Config;
 const logging = @import("./logging.zig");
-const db = @import("./db.zig");
+const DB = @import("./db.zig").DB;
 const pq = @cImport({
     @cInclude("libpq-fe.h");
 });
@@ -29,13 +29,15 @@ pub fn main() !void {
     defer file.close();
     var logger = logging.getGlobalLogger().?;
 
-    const conn = db.connect("postgresql://user:password@localhost:5432/test");
-    defer db.finish(conn);
-
-    logger.info("Connected to postgresql: {}", .{pq.PQsocket(conn)});
+    const db = DB.init(
+        allocator,
+        "postgresql://user:password@localhost:5432/test",
+        logger,
+    );
+    defer db.deinit();
 
     {
-        const pqRes = pq.PQexec(conn,
+        const pqRes = pq.PQexec(db.conn,
             \\ CREATE TABLE IF NOT EXISTS users (
             \\     id SERIAL PRIMARY KEY, 
             \\     name VARCHAR(100), 
@@ -45,7 +47,7 @@ pub fn main() !void {
         defer pq.PQclear(pqRes);
 
         if (pq.PQresultStatus(pqRes) != pq.PGRES_COMMAND_OK) {
-            logger.err("{s}", .{pq.PQerrorMessage(conn)});
+            logger.err("{s}", .{pq.PQerrorMessage(db.conn)});
         } else {
             logger.info("Command successfully executed.", .{});
         }
@@ -64,21 +66,20 @@ pub fn main() !void {
     // }
 
     {
-        const pq_res = pq.PQexec(conn,
-            \\ SELECT * FROM users ORDER BY name DESC
-        );
-        defer pq.PQclear(pq_res);
+        const users = try db.fetchList(User, allocator, "SELECT * FROM users ORDER BY name DESC");
+        defer users.deinit();
 
-        const status = pq.PQresultStatus(pq_res);
-        if (status != pq.PGRES_TUPLES_OK) {
-            logger.err("{s} => {s}", .{ pq.PQresStatus(status), pq.PQerrorMessage(conn) });
-        } else {
-            const users = try db.ParseList(User).do(allocator, pq_res.?);
+        for (users.items()) |user| {
+            std.debug.print("{} [{}] - {s}\n", .{ user.id, user.active, user.name });
+        }
+    }
+    std.debug.print("=================================\n", .{});
+    {
+        const users = try db.fetchList(User, allocator, "SELECT * FROM users ORDER BY name ASC");
+        defer users.deinit();
 
-            defer users.deinit();
-            for (users.items) |user| {
-                std.debug.print("{} [{}] - {s}\n", .{ user.id, user.active, user.name });
-            }
+        for (users.items()) |user| {
+            std.debug.print("{} [{}] - {s}\n", .{ user.id, user.active, user.name });
         }
     }
 }
